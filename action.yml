@@ -6,9 +6,9 @@ inputs:
     description: Base branch for comparison (e.g. main)
     required: true
   lockfile:
-    description: Path to the lockfile to monitor
+    description: Path to the lockfile to monitor (auto-detects from changed files if not set)
     required: false
-    default: pnpm-lock.yaml
+    default: ""
   fail-on-warning:
     description: Whether to fail the check (exit 1) or just warn
     required: false
@@ -26,21 +26,42 @@ runs:
       run: |
         CHANGED_FILES=$(git diff --name-only "origin/$BASE_REF"...HEAD)
 
-        if ! echo "$CHANGED_FILES" | grep -q "$LOCKFILE"; then
-          echo "Lockfile $LOCKFILE not modified. Skipping check."
-          exit 0
-        fi
-
-        if echo "$CHANGED_FILES" | grep -q 'package.json'; then
-          echo "✓ Lockfile change has corresponding package.json changes."
-          exit 0
-        fi
-
-        MSG="$LOCKFILE was modified without any package.json changes. This could indicate lockfile tampering."
-
-        if [ "$FAIL_ON_WARNING" = "true" ]; then
-          echo "::error::$MSG"
-          exit 1
+        LOCKFILES=()
+        if [ -n "$LOCKFILE" ]; then
+          LOCKFILES=("$LOCKFILE")
         else
-          echo "::warning::$MSG"
+          for lf in pnpm-lock.yaml package-lock.json yarn.lock; do
+            if echo "$CHANGED_FILES" | grep -qF "$lf"; then
+              LOCKFILES+=("$lf")
+            fi
+          done
+        fi
+
+        if [ ${#LOCKFILES[@]} -eq 0 ]; then
+          echo "No lockfile changes detected. Skipping check."
+          exit 0
+        fi
+
+        HAS_PKG_JSON=false
+        if echo "$CHANGED_FILES" | grep -qF 'package.json'; then
+          HAS_PKG_JSON=true
+        fi
+
+        FAILED=false
+        for lf in "${LOCKFILES[@]}"; do
+          if [ "$HAS_PKG_JSON" = "true" ]; then
+            echo "✓ $lf change has corresponding package.json changes."
+          else
+            MSG="$lf was modified without any package.json changes. This could indicate lockfile tampering."
+            if [ "$FAIL_ON_WARNING" = "true" ]; then
+              echo "::error::$MSG"
+              FAILED=true
+            else
+              echo "::warning::$MSG"
+            fi
+          fi
+        done
+
+        if [ "$FAILED" = "true" ]; then
+          exit 1
         fi
