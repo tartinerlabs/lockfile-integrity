@@ -4,7 +4,7 @@ A GitHub Action that detects lockfile changes without corresponding `package.jso
 
 ## Why?
 
-If `pnpm-lock.yaml` (or `package-lock.json`, `yarn.lock`) changes in a PR but no `package.json` was touched, it could indicate:
+If `pnpm-lock.yaml` (or `package-lock.json`, `yarn.lock`, `bun.lock`) changes in a PR but no `package.json` was touched, it could indicate:
 
 - Lockfile tampering (malicious dependency injection)
 - Accidental lockfile regeneration
@@ -66,6 +66,31 @@ on:
           lockfile: yarn.lock
 ```
 
+### bun
+
+```yaml
+on:
+  pull_request:
+    paths:
+      - bun.lock
+
+# ...
+      - uses: tartinerlabs/lockfile-integrity@v1
+        with:
+          base-ref: ${{ github.base_ref }}
+          lockfile: bun.lock
+```
+
+### Auto-detect mode
+
+Omit `lockfile` to have the action detect all changed lockfiles automatically:
+
+```yaml
+      - uses: tartinerlabs/lockfile-integrity@v1
+        with:
+          base-ref: ${{ github.base_ref }}
+```
+
 ### Warn-only mode
 
 To emit a warning instead of failing the check:
@@ -82,8 +107,15 @@ To emit a warning instead of failing the check:
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `base-ref` | Yes | — | Base branch for comparison (e.g. `main`) |
-| `lockfile` | No | `pnpm-lock.yaml` | Path to the lockfile to monitor |
+| `lockfile` | No | _(auto-detect)_ | Lockfile to monitor; auto-detects from changed files when omitted |
 | `fail-on-warning` | No | `true` | Whether to fail the check or just warn |
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `tampered` | `"true"` if lockfile tampering was detected, `"false"` otherwise |
+| `lockfiles` | Space-separated list of lockfiles that were modified |
 
 ## Requirements
 
