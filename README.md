@@ -60,6 +60,14 @@ jobs:
 
 That's it. The action auto detects which lockfile(s) changed. No configuration needed.
 
+> **Tip:** For maximum supply chain safety, pin to a specific commit SHA instead of a mutable tag:
+>
+> ```yaml
+> - uses: tartinerlabs/lockfile-integrity@<commit_sha>  # v1
+> ```
+>
+> Tags can be moved to point at different commits. A SHA pin guarantees you run exactly the code you audited.
+
 ### Pin to a Specific Lockfile
 
 If your repo uses a single package manager, you can be explicit:
