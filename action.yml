@@ -1,0 +1,46 @@
+name: Lockfile Integrity Check
+description: Detects lockfile changes without corresponding package.json modifications — a supply chain tamper signal
+
+inputs:
+  base-ref:
+    description: Base branch for comparison (e.g. main)
+    required: true
+  lockfile:
+    description: Path to the lockfile to monitor
+    required: false
+    default: pnpm-lock.yaml
+  fail-on-warning:
+    description: Whether to fail the check (exit 1) or just warn
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Check for corresponding package.json changes
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base-ref }}
+        LOCKFILE: ${{ inputs.lockfile }}
+        FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
+      run: |
+        CHANGED_FILES=$(git diff --name-only "origin/$BASE_REF"...HEAD)
+
+        if ! echo "$CHANGED_FILES" | grep -q "$LOCKFILE"; then
+          echo "Lockfile $LOCKFILE not modified. Skipping check."
+          exit 0
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q 'package.json'; then
+          echo "✓ Lockfile change has corresponding package.json changes."
+          exit 0
+        fi
+
+        MSG="$LOCKFILE was modified without any package.json changes. This could indicate lockfile tampering."
+
+        if [ "$FAIL_ON_WARNING" = "true" ]; then
+          echo "::error::$MSG"
+          exit 1
+        else
+          echo "::warning::$MSG"
+        fi
