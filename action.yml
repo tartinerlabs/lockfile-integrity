@@ -1,6 +1,10 @@
 name: Lockfile Integrity Check
 description: Detects lockfile changes without corresponding package.json modifications — a supply chain tamper signal
 
+branding:
+  icon: shield
+  color: orange
+
 inputs:
   base-ref:
     description: Base branch for comparison (e.g. main)
