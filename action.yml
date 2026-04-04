@@ -33,13 +33,14 @@ runs:
         LOCKFILE: ${{ inputs.lockfile }}
         FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
       run: |
+        KNOWN_LOCKFILES=(pnpm-lock.yaml package-lock.json yarn.lock bun.lock)
         CHANGED_FILES=$(git diff --name-only "origin/$BASE_REF"...HEAD)
 
         LOCKFILES=()
         if [ -n "$LOCKFILE" ]; then
           LOCKFILES=("$LOCKFILE")
         else
-          for lf in pnpm-lock.yaml package-lock.json yarn.lock; do
+          for lf in "${KNOWN_LOCKFILES[@]}"; do
             if echo "$CHANGED_FILES" | grep -qF "$lf"; then
               LOCKFILES+=("$lf")
             fi

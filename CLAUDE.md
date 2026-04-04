@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A GitHub composite action (`action.yml`) that detects lockfile changes (pnpm-lock.yaml, package-lock.json, yarn.lock) without corresponding `package.json` modifications in a PR — a supply chain tamper signal.
+A GitHub composite action (`action.yml`) that detects lockfile changes (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lock) without corresponding `package.json` modifications in a PR — a supply chain tamper signal.
 
 ## Architecture
 
