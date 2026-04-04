@@ -14,10 +14,19 @@ inputs:
     required: false
     default: "true"
 
+outputs:
+  tampered:
+    description: Whether lockfile tampering was detected ("true" or "false")
+    value: ${{ steps.check.outputs.tampered }}
+  lockfiles:
+    description: Space-separated list of lockfiles that were modified
+    value: ${{ steps.check.outputs.lockfiles }}
+
 runs:
   using: composite
   steps:
     - name: Check for corresponding package.json changes
+      id: check
       shell: bash
       env:
         BASE_REF: ${{ inputs.base-ref }}
@@ -39,8 +48,12 @@ runs:
 
         if [ ${#LOCKFILES[@]} -eq 0 ]; then
           echo "No lockfile changes detected. Skipping check."
+          echo "tampered=false" >> "$GITHUB_OUTPUT"
+          echo "lockfiles=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
+
+        echo "lockfiles=${LOCKFILES[*]}" >> "$GITHUB_OUTPUT"
 
         HAS_PKG_JSON=false
         if echo "$CHANGED_FILES" | grep -qF 'package.json'; then
@@ -61,6 +74,8 @@ runs:
             fi
           fi
         done
+
+        echo "tampered=$FAILED" >> "$GITHUB_OUTPUT"
 
         if [ "$FAILED" = "true" ]; then
           exit 1
