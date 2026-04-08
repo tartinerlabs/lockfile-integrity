@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A GitHub composite action (`action.yml`) that detects lockfile changes (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lock) without corresponding `package.json` modifications in a PR — a supply chain tamper signal.
+A GitHub composite action (`action.yml`) that detects lockfile changes (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lock) without corresponding manifest or config file modifications in a PR — a supply chain tamper signal.
 
 ## Outputs
 
@@ -19,7 +19,7 @@ The bash script:
 1. Diffs changed files between the PR head and the base branch (`git diff --name-only`)
 2. Resolves which lockfiles to check — uses the `lockfile` input if set, otherwise auto-detects from changed files against the known list (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`)
 3. Exits early if no lockfile was modified
-4. Passes if any `package.json` was also changed
+4. Passes if any `package.json`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc.yml`, `.yarnrc`, or `bunfig.toml` was also changed
 5. Fails (or warns) if only the lockfile changed
 6. Writes `tampered` and `lockfiles` to `$GITHUB_OUTPUT`
 

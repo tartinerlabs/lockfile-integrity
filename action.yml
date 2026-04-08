@@ -60,17 +60,18 @@ runs:
 
         echo "lockfiles=${LOCKFILES[*]}" >> "$GITHUB_OUTPUT"
 
-        HAS_PKG_JSON=false
-        if echo "$CHANGED_FILES" | grep -qF 'package.json'; then
-          HAS_PKG_JSON=true
+        MANIFEST_PATTERN='(package\.json|pnpm-workspace\.yaml|\.npmrc|\.yarnrc\.yml|\.yarnrc|bunfig\.toml)'
+        HAS_MANIFEST=false
+        if echo "$CHANGED_FILES" | grep -qE "$MANIFEST_PATTERN"; then
+          HAS_MANIFEST=true
         fi
 
         FAILED=false
         for lf in "${LOCKFILES[@]}"; do
-          if [ "$HAS_PKG_JSON" = "true" ]; then
-            echo "✓ $lf change has corresponding package.json changes."
+          if [ "$HAS_MANIFEST" = "true" ]; then
+            echo "✓ $lf change has corresponding manifest or config changes."
           else
-            MSG="$lf was modified without any package.json changes. This could indicate lockfile tampering."
+            MSG="$lf was modified without any package.json, workspace, or config changes. This could indicate lockfile tampering."
             if [ "$FAIL_ON_WARNING" = "true" ]; then
               echo "::error::$MSG"
               FAILED=true

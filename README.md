@@ -22,9 +22,9 @@ PR opened
   |
   |__ lockfile changed?
   |     |
-  |     |__ package.json also changed?  --> Pass (legitimate dependency update)
+  |     |__ package.json / workspace / config also changed?  --> Pass (legitimate dependency update)
   |     |
-  |     |__ package.json untouched?     --> Fail with annotation (possible tampering)
+  |     |__ none of those changed?                           --> Fail with annotation (possible tampering)
   |
   |__ no lockfile changed?              --> Skip (nothing to check)
 ```
@@ -128,10 +128,10 @@ The checkout step **must** use `fetch-depth: 0` so the action can diff against t
 No. This catches one specific signal: lockfile only changes. It's a lightweight tripwire, not a full dependency audit. Pair it with tools like `npm audit`, Socket, or Snyk for deeper analysis.
 
 **What if I regenerate my lockfile intentionally?**
-Touch `package.json` in the same PR (even a whitespace change counts) and the check passes. Or use `fail-on-warning: "false"` to get a warning annotation instead of a hard failure.
+Touch `package.json` in the same PR (even a whitespace change counts) and the check passes. Changes to `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc.yml`, `.yarnrc`, or `bunfig.toml` also count as legitimate triggers. Or use `fail-on-warning: "false"` to get a warning annotation instead of a hard failure.
 
 **Does it work with monorepos?**
-Yes. The action checks if *any* `package.json` in the repo changed, so a lockfile update from a workspace dependency change will pass.
+Yes. The action checks if any `package.json` or workspace file (`pnpm-workspace.yaml`) changed, so lockfile updates driven by workspace or catalog changes pass without false positives.
 
 ## License
 
