@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/tartinerlabs/lockfile-integrity/compare/v1.0.0...v1.1.0) (2026-04-08)
+
+
+### Features
+
+* extend lockfile check to pass on workspace and config file changes ([1c8aff4](https://github.com/tartinerlabs/lockfile-integrity/commit/1c8aff4303d7f4336b8636cc0820b356d4eca550))
+
 ## 1.0.0 (2026-04-04)
 
 
