@@ -29,6 +29,10 @@ The bash script:
 - `lockfile` (default: `""`) — which lockfile to monitor; auto-detects from changed files when empty
 - `fail-on-warning` (default: `"true"`) — exit 1 on detection, or just emit a GitHub warning
 
+## Commits
+
+Use release-please conventional commit format. `feat:` for new behaviour, `fix:` for bug fixes, `docs:` for documentation only, `chore:` for maintenance. Release-please drives versioning from these prefixes.
+
 ## Testing
 
 No automated tests. To verify changes, create a test PR in a repo that uses this action with `fetch-depth: 0` on checkout.
