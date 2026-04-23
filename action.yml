@@ -1,5 +1,6 @@
 name: Lockfile Integrity Check
-description: Detects lockfile changes without corresponding manifest or config file modifications — a supply chain tamper signal
+author: Tartiner Labs
+description: Detects lockfile changes without corresponding manifest or config file modifications. Supports npm, pnpm, yarn, bun, and custom lockfiles with optional registry validation and bot allowlisting.
 
 branding:
   icon: shield
@@ -25,6 +26,14 @@ inputs:
     description: Comma-separated list of allowed registry hostnames (e.g. registry.npmjs.org,registry.yarnpkg.com). If set, lockfile changes introducing URLs outside this list will fail.
     required: false
     default: ""
+  custom-lockfiles:
+    description: Comma-separated list of additional lockfile paths to monitor (e.g. Gemfile.lock,Cargo.lock)
+    required: false
+    default: ""
+  verbose:
+    description: Enable verbose logging for debugging
+    required: false
+    default: "false"
 
 outputs:
   tampered:
@@ -49,10 +58,50 @@ runs:
         FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
         ALLOWED_ACTORS: ${{ inputs.allowed-actors }}
         ALLOWED_REGISTRIES: ${{ inputs.allowed-registries }}
+        CUSTOM_LOCKFILES: ${{ inputs.custom-lockfiles }}
+        VERBOSE: ${{ inputs.verbose }}
         GITHUB_ACTOR: ${{ github.actor }}
       run: |
+        log() {
+          if [ "$VERBOSE" = "true" ]; then
+            echo "[lockfile-integrity] $1"
+          fi
+        }
+
+        # Input validation
+        if [ -z "$BASE_REF" ]; then
+          echo "::error::base-ref input is required but was not provided."
+          exit 1
+        fi
+
+        log "base-ref: $BASE_REF"
+        log "actor: $GITHUB_ACTOR"
+        log "lockfile input: $LOCKFILE"
+        log "custom-lockfiles: $CUSTOM_LOCKFILES"
+        log "allowed-actors: $ALLOWED_ACTORS"
+        log "allowed-registries: $ALLOWED_REGISTRIES"
+
+        if ! git rev-parse --verify "origin/$BASE_REF" >/dev/null 2>&1; then
+          echo "::error::origin/$BASE_REF is not a valid git ref. Did you forget fetch-depth: 0 in actions/checkout?"
+          exit 1
+        fi
+
         KNOWN_LOCKFILES=(pnpm-lock.yaml package-lock.json yarn.lock bun.lock bun.lockb)
+
+        # Append custom lockfiles
+        if [ -n "$CUSTOM_LOCKFILES" ]; then
+          IFS=',' read -ra EXTRA_LOCKFILES <<< "$CUSTOM_LOCKFILES"
+          for clf in "${EXTRA_LOCKFILES[@]}"; do
+            clf=$(echo "$clf" | xargs)
+            [ -z "$clf" ] && continue
+            KNOWN_LOCKFILES+=("$clf")
+            log "Added custom lockfile: $clf"
+          done
+        fi
+
         CHANGED_FILES=$(git diff --name-only "origin/$BASE_REF"...HEAD)
+        log "Changed files:"
+        log "$CHANGED_FILES"
 
         # Skip if actor is in allowlist
         if [ -n "$ALLOWED_ACTORS" ]; then
@@ -80,6 +129,8 @@ runs:
           done
         fi
 
+        log "Detected lockfiles: ${LOCKFILES[*]}"
+
         if [ ${#LOCKFILES[@]} -eq 0 ]; then
           echo "No lockfile changes detected. Skipping check."
           echo "tampered=false" >> "$GITHUB_OUTPUT"
@@ -90,16 +141,27 @@ runs:
 
         echo "lockfiles=${LOCKFILES[*]}" >> "$GITHUB_OUTPUT"
 
-        MANIFEST_PATTERN='(^|/)(package\.json|pnpm-workspace\.yaml|\.npmrc|\.yarnrc\.yml|\.yarnrc|bunfig\.toml)$'
-        HAS_MANIFEST=false
-        if echo "$CHANGED_FILES" | grep -qE "$MANIFEST_PATTERN"; then
-          HAS_MANIFEST=true
-        fi
-
         FAILED=false
         SUSPICIOUS_URLS=()
 
         for lf in "${LOCKFILES[@]}"; do
+          # Monorepo-aware manifest matching
+          lf_dir=$(dirname "$lf")
+          if [ "$lf_dir" = "." ]; then
+            # Root lockfile: any manifest or workspace config counts
+            manifest_pattern='(^|/)(package\.json|pnpm-workspace\.yaml|\.npmrc|\.yarnrc\.yml|\.yarnrc|bunfig\.toml)$'
+          else
+            # Subdirectory lockfile: manifests in same dir + workspace configs
+            manifest_pattern="(^|/)${lf_dir}/(package\.json|\.npmrc)$|(^|/)(pnpm-workspace\.yaml|\.yarnrc\.yml|\.yarnrc|bunfig\.toml)$"
+          fi
+
+          log "Checking $lf with manifest pattern: $manifest_pattern"
+
+          HAS_MANIFEST=false
+          if echo "$CHANGED_FILES" | grep -qE "$manifest_pattern"; then
+            HAS_MANIFEST=true
+          fi
+
           if [ "$HAS_MANIFEST" = "true" ]; then
             echo "✓ $lf change has corresponding manifest or config changes."
           else
@@ -117,9 +179,10 @@ runs:
             LOCKFILE_DIFF=$(git diff "origin/$BASE_REF"...HEAD -- "$lf" || true)
 
             if echo "$LOCKFILE_DIFF" | grep -q "^Binary files"; then
-              echo "Skipping registry check for binary lockfile $lf."
+              log "Skipping registry check for binary lockfile $lf."
             else
               URL_HOSTS=$(echo "$LOCKFILE_DIFF" | grep -oE 'https?://[^/"]+' | sed -e 's|^http://||' -e 's|^https://||' | sort -u)
+              log "Extracted hosts from $lf: $URL_HOSTS"
 
               IFS=',' read -ra REGISTRIES <<< "$ALLOWED_REGISTRIES"
               while IFS= read -r host; do

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A GitHub composite action (`action.yml`) that detects lockfile changes (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lock, bun.lockb) without corresponding manifest or config file modifications in a PR — a supply chain tamper signal.
+A GitHub composite action (`action.yml`) that detects lockfile changes (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lock, bun.lockb, and custom lockfiles) without corresponding manifest or config file modifications in a PR — a supply chain tamper signal.
 
 ## Outputs
 
@@ -17,14 +17,17 @@ A GitHub composite action (`action.yml`) that detects lockfile changes (pnpm-loc
 The entire action is a single file: `action.yml`. It uses `runs: using: composite` with an inline bash script. There is no build step, no compiled output, no dependencies, and no test framework.
 
 The bash script:
-1. Skips the check if `github.actor` is in the `allowed-actors` list
-2. Diffs changed files between the PR head and the base branch (`git diff --name-only`)
-3. Resolves which lockfiles to check — uses the `lockfile` input if set, otherwise auto-detects from changed files against the known list (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`, `bun.lockb`)
-4. Exits early if no lockfile was modified
-5. Passes if any `package.json`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc.yml`, `.yarnrc`, or `bunfig.toml` was also changed
-6. Fails (or warns) if only the lockfile changed
-7. If `allowed-registries` is set, extracts hostnames from URLs in the lockfile diff and flags any that are not in the allowlist
-8. Writes `tampered`, `lockfiles`, and `suspicious-urls` to `$GITHUB_OUTPUT`
+1. Validates `base-ref` is provided and `origin/$BASE_REF` is a valid git ref
+2. Skips the check if `github.actor` is in the `allowed-actors` list
+3. Diffs changed files between the PR head and the base branch (`git diff --name-only`)
+4. Resolves which lockfiles to check — uses the `lockfile` input if set, otherwise auto-detects from changed files against the known list plus any `custom-lockfiles`
+5. Exits early if no lockfile was modified
+6. Uses monorepo-aware manifest matching:
+   - Root lockfiles check against any manifest or workspace config
+   - Subdirectory lockfiles check against manifests in the same directory plus root workspace configs
+7. Fails (or warns) if only the lockfile changed
+8. If `allowed-registries` is set, extracts hostnames from URLs in the lockfile diff and flags any that are not in the allowlist
+9. Writes `tampered`, `lockfiles`, and `suspicious-urls` to `$GITHUB_OUTPUT`
 
 ## Inputs
 
@@ -33,6 +36,8 @@ The bash script:
 - `fail-on-warning` (default: `"true"`) — exit 1 on detection, or just emit a GitHub warning
 - `allowed-actors` (default: `""`) — comma-separated GitHub actors to skip the check for
 - `allowed-registries` (default: `""`) — comma-separated allowed registry hostnames for URL validation
+- `custom-lockfiles` (default: `""`) — comma-separated additional lockfile paths
+- `verbose` (default: `"false"`) — enable verbose logging
 
 ## Commits
 
@@ -40,7 +45,7 @@ Use release-please conventional commit format. `feat:` for new behaviour, `fix:`
 
 ## Testing
 
-No automated tests. To verify changes, create a test PR in a repo that uses this action with `fetch-depth: 0` on checkout.
+Run `./test.sh` to execute the local bash test harness covering filename matching, subdirectory detection, manifest matching, actor allowlists, registry validation, custom lockfiles, and verbose mode.
 
 ## Key Constraints
 
