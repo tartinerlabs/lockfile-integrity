@@ -185,6 +185,16 @@ Yes. The action uses monorepo-aware matching: a lockfile in a subdirectory is va
 **Can I use this for non-JavaScript projects?**
 Yes. Use the `custom-lockfiles` input to monitor lockfiles from any ecosystem (Ruby, Rust, Python, Nix, etc.).
 
+## Testing
+
+Run the test harness locally:
+
+```bash
+bash test.sh
+```
+
+CI runs the same tests on Ubuntu and macOS to ensure portability.
+
 ## License
 
 [MIT](LICENSE)
