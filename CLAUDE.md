@@ -4,30 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A GitHub composite action (`action.yml`) that detects lockfile changes (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lock) without corresponding manifest or config file modifications in a PR — a supply chain tamper signal.
+A GitHub composite action (`action.yml`) that detects lockfile changes (pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lock, bun.lockb) without corresponding manifest or config file modifications in a PR — a supply chain tamper signal.
 
 ## Outputs
 
 - `tampered` — `"true"` if lockfile tampering was detected, `"false"` otherwise
 - `lockfiles` — space-separated list of lockfiles that were modified
+- `suspicious-urls` — space-separated list of suspicious registry URLs detected
 
 ## Architecture
 
 The entire action is a single file: `action.yml`. It uses `runs: using: composite` with an inline bash script. There is no build step, no compiled output, no dependencies, and no test framework.
 
 The bash script:
-1. Diffs changed files between the PR head and the base branch (`git diff --name-only`)
-2. Resolves which lockfiles to check — uses the `lockfile` input if set, otherwise auto-detects from changed files against the known list (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`)
-3. Exits early if no lockfile was modified
-4. Passes if any `package.json`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc.yml`, `.yarnrc`, or `bunfig.toml` was also changed
-5. Fails (or warns) if only the lockfile changed
-6. Writes `tampered` and `lockfiles` to `$GITHUB_OUTPUT`
+1. Skips the check if `github.actor` is in the `allowed-actors` list
+2. Diffs changed files between the PR head and the base branch (`git diff --name-only`)
+3. Resolves which lockfiles to check — uses the `lockfile` input if set, otherwise auto-detects from changed files against the known list (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`, `bun.lockb`)
+4. Exits early if no lockfile was modified
+5. Passes if any `package.json`, `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc.yml`, `.yarnrc`, or `bunfig.toml` was also changed
+6. Fails (or warns) if only the lockfile changed
+7. If `allowed-registries` is set, extracts hostnames from URLs in the lockfile diff and flags any that are not in the allowlist
+8. Writes `tampered`, `lockfiles`, and `suspicious-urls` to `$GITHUB_OUTPUT`
 
 ## Inputs
 
 - `base-ref` (required) — base branch for git diff comparison
 - `lockfile` (default: `""`) — which lockfile to monitor; auto-detects from changed files when empty
 - `fail-on-warning` (default: `"true"`) — exit 1 on detection, or just emit a GitHub warning
+- `allowed-actors` (default: `""`) — comma-separated GitHub actors to skip the check for
+- `allowed-registries` (default: `""`) — comma-separated allowed registry hostnames for URL validation
 
 ## Commits
 

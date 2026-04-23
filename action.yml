@@ -17,6 +17,14 @@ inputs:
     description: Whether to fail the check (exit 1) or just warn
     required: false
     default: "true"
+  allowed-actors:
+    description: Comma-separated list of GitHub actors to skip the check for (e.g. dependabot[bot],renovate[bot])
+    required: false
+    default: ""
+  allowed-registries:
+    description: Comma-separated list of allowed registry hostnames (e.g. registry.npmjs.org,registry.yarnpkg.com). If set, lockfile changes introducing URLs outside this list will fail.
+    required: false
+    default: ""
 
 outputs:
   tampered:
@@ -25,6 +33,9 @@ outputs:
   lockfiles:
     description: Space-separated list of lockfiles that were modified
     value: ${{ steps.check.outputs.lockfiles }}
+  suspicious-urls:
+    description: Space-separated list of suspicious registry URLs detected
+    value: ${{ steps.check.outputs.suspicious-urls }}
 
 runs:
   using: composite
@@ -36,16 +47,34 @@ runs:
         BASE_REF: ${{ inputs.base-ref }}
         LOCKFILE: ${{ inputs.lockfile }}
         FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
+        ALLOWED_ACTORS: ${{ inputs.allowed-actors }}
+        ALLOWED_REGISTRIES: ${{ inputs.allowed-registries }}
+        GITHUB_ACTOR: ${{ github.actor }}
       run: |
-        KNOWN_LOCKFILES=(pnpm-lock.yaml package-lock.json yarn.lock bun.lock)
+        KNOWN_LOCKFILES=(pnpm-lock.yaml package-lock.json yarn.lock bun.lock bun.lockb)
         CHANGED_FILES=$(git diff --name-only "origin/$BASE_REF"...HEAD)
+
+        # Skip if actor is in allowlist
+        if [ -n "$ALLOWED_ACTORS" ]; then
+          IFS=',' read -ra ACTORS <<< "$ALLOWED_ACTORS"
+          for actor in "${ACTORS[@]}"; do
+            actor=$(echo "$actor" | xargs)
+            if [ "$GITHUB_ACTOR" = "$actor" ]; then
+              echo "Actor $GITHUB_ACTOR is in allowlist. Skipping check."
+              echo "tampered=false" >> "$GITHUB_OUTPUT"
+              echo "lockfiles=" >> "$GITHUB_OUTPUT"
+              echo "suspicious-urls=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+        fi
 
         LOCKFILES=()
         if [ -n "$LOCKFILE" ]; then
           LOCKFILES=("$LOCKFILE")
         else
           for lf in "${KNOWN_LOCKFILES[@]}"; do
-            if echo "$CHANGED_FILES" | grep -qF "$lf"; then
+            if echo "$CHANGED_FILES" | grep -qE "(^|/)$lf$"; then
               LOCKFILES+=("$lf")
             fi
           done
@@ -55,18 +84,21 @@ runs:
           echo "No lockfile changes detected. Skipping check."
           echo "tampered=false" >> "$GITHUB_OUTPUT"
           echo "lockfiles=" >> "$GITHUB_OUTPUT"
+          echo "suspicious-urls=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
         echo "lockfiles=${LOCKFILES[*]}" >> "$GITHUB_OUTPUT"
 
-        MANIFEST_PATTERN='(package\.json|pnpm-workspace\.yaml|\.npmrc|\.yarnrc\.yml|\.yarnrc|bunfig\.toml)'
+        MANIFEST_PATTERN='(^|/)(package\.json|pnpm-workspace\.yaml|\.npmrc|\.yarnrc\.yml|\.yarnrc|bunfig\.toml)$'
         HAS_MANIFEST=false
         if echo "$CHANGED_FILES" | grep -qE "$MANIFEST_PATTERN"; then
           HAS_MANIFEST=true
         fi
 
         FAILED=false
+        SUSPICIOUS_URLS=()
+
         for lf in "${LOCKFILES[@]}"; do
           if [ "$HAS_MANIFEST" = "true" ]; then
             echo "✓ $lf change has corresponding manifest or config changes."
@@ -79,7 +111,49 @@ runs:
               echo "::warning::$MSG"
             fi
           fi
+
+          # Registry verification
+          if [ -n "$ALLOWED_REGISTRIES" ]; then
+            LOCKFILE_DIFF=$(git diff "origin/$BASE_REF"...HEAD -- "$lf" || true)
+
+            if echo "$LOCKFILE_DIFF" | grep -q "^Binary files"; then
+              echo "Skipping registry check for binary lockfile $lf."
+            else
+              URL_HOSTS=$(echo "$LOCKFILE_DIFF" | grep -oE 'https?://[^/"]+' | sed -e 's|^http://||' -e 's|^https://||' | sort -u)
+
+              IFS=',' read -ra REGISTRIES <<< "$ALLOWED_REGISTRIES"
+              while IFS= read -r host; do
+                [ -z "$host" ] && continue
+                ALLOWED=false
+                for reg in "${REGISTRIES[@]}"; do
+                  reg=$(echo "$reg" | xargs)
+                  if [ "$host" = "$reg" ]; then
+                    ALLOWED=true
+                    break
+                  fi
+                done
+                if [ "$ALLOWED" = "false" ]; then
+                  SUSPICIOUS_URLS+=("$host")
+                  URL_MSG="Suspicious registry URL detected in $lf: $host"
+                  if [ "$FAIL_ON_WARNING" = "true" ]; then
+                    echo "::error::$URL_MSG"
+                    FAILED=true
+                  else
+                    echo "::warning::$URL_MSG"
+                  fi
+                fi
+              done <<< "$URL_HOSTS"
+            fi
+          fi
         done
+
+        # Remove duplicates from suspicious URLs
+        if [ ${#SUSPICIOUS_URLS[@]} -gt 0 ]; then
+          UNIQUE_URLS=$(printf '%s\n' "${SUSPICIOUS_URLS[@]}" | sort -u | tr '\n' ' ' | sed 's/ $//')
+        else
+          UNIQUE_URLS=""
+        fi
+        echo "suspicious-urls=$UNIQUE_URLS" >> "$GITHUB_OUTPUT"
 
         echo "tampered=$FAILED" >> "$GITHUB_OUTPUT"
 

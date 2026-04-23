@@ -4,7 +4,7 @@
 
 A zero dependency GitHub Action that catches suspicious lockfile modifications in pull requests, the kind that slip past code review and open the door to supply chain attacks.
 
-Supports `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, and `bun.lock`.
+Supports `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`, and `bun.lockb`.
 
 ## The Problem
 
@@ -60,6 +60,28 @@ jobs:
 
 That's it. The action auto detects which lockfile(s) changed. No configuration needed.
 
+### Skip Checks for Bot-Generated PRs
+
+Dependabot and Renovate often open lockfile-only maintenance PRs. Skip the check for trusted actors:
+
+```yaml
+- uses: tartinerlabs/lockfile-integrity@v1
+  with:
+    base-ref: ${{ github.base_ref }}
+    allowed-actors: "dependabot[bot],renovate[bot]"
+```
+
+### Validate Registry URLs
+
+For an additional layer of defence, restrict which registry hostnames are allowed in lockfile changes. Any URL pointing outside the allowlist will be flagged:
+
+```yaml
+- uses: tartinerlabs/lockfile-integrity@v1
+  with:
+    base-ref: ${{ github.base_ref }}
+    allowed-registries: "registry.npmjs.org,registry.yarnpkg.com"
+```
+
 > **Tip:** For maximum supply chain safety, pin to a specific commit SHA instead of a mutable tag:
 >
 > ```yaml
@@ -110,6 +132,8 @@ Useful for rolling out gradually. Annotates the PR without blocking it:
 | `base-ref` | Yes | | Base branch for comparison (e.g. `main`) |
 | `lockfile` | No | _(auto detect)_ | Lockfile to monitor; auto detects from changed files when omitted |
 | `fail-on-warning` | No | `true` | Whether to fail the check or just warn |
+| `allowed-actors` | No | `""` | Comma-separated GitHub actors to skip (e.g. `dependabot[bot]`) |
+| `allowed-registries` | No | `""` | Comma-separated allowed registry hostnames (e.g. `registry.npmjs.org`) |
 
 ## Outputs
 
@@ -117,6 +141,7 @@ Useful for rolling out gradually. Annotates the PR without blocking it:
 |--------|-------------|
 | `tampered` | `"true"` if lockfile tampering was detected, `"false"` otherwise |
 | `lockfiles` | Space separated list of lockfiles that were modified |
+| `suspicious-urls` | Space separated list of suspicious registry URLs detected |
 
 ## Requirements
 
@@ -128,7 +153,7 @@ The checkout step **must** use `fetch-depth: 0` so the action can diff against t
 No. This catches one specific signal: lockfile only changes. It's a lightweight tripwire, not a full dependency audit. Pair it with tools like `npm audit`, Socket, or Snyk for deeper analysis.
 
 **What if I regenerate my lockfile intentionally?**
-Touch `package.json` in the same PR (even a whitespace change counts) and the check passes. Changes to `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc.yml`, `.yarnrc`, or `bunfig.toml` also count as legitimate triggers. Or use `fail-on-warning: "false"` to get a warning annotation instead of a hard failure.
+Touch `package.json` in the same PR (even a whitespace change counts) and the check passes. Changes to `pnpm-workspace.yaml`, `.npmrc`, `.yarnrc.yml`, `.yarnrc`, or `bunfig.toml` also count as legitimate triggers. Or use `fail-on-warning: "false"` to get a warning annotation instead of a hard failure. You can also add the PR author to `allowed-actors` if it's a trusted automation account.
 
 **Does it work with monorepos?**
 Yes. The action checks if any `package.json` or workspace file (`pnpm-workspace.yaml`) changed, so lockfile updates driven by workspace or catalog changes pass without false positives.
