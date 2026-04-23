@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/tartinerlabs/lockfile-integrity/compare/v1.1.0...v1.2.0) (2026-04-23)
+
+
+### Features
+
+* add allowed-actors, allowed-registries inputs and suspicious-urls output ([3ade52c](https://github.com/tartinerlabs/lockfile-integrity/commit/3ade52c6b877437c7dd494beb9015b2370658730))
+* comprehensive action improvements ([a6e7177](https://github.com/tartinerlabs/lockfile-integrity/commit/a6e717750e662a95b675a1c090fcc19aaa70713e))
+
 ## [1.1.0](https://github.com/tartinerlabs/lockfile-integrity/compare/v1.0.0...v1.1.0) (2026-04-08)
 
 
