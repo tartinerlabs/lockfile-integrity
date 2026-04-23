@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "lockfile_integrity",
+  "project_id": "cd30d485-6827-43c5-ab51-d6ebd5d26739"
+}
